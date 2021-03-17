@@ -1,15 +1,15 @@
 import {FlatTreeControl} from '@angular/cdk/tree';
-import {Component, Input, OnInit} from '@angular/core';
+import {Component, EventEmitter, Input, OnInit, Output} from '@angular/core';
 import {MatTreeFlatDataSource, MatTreeFlattener} from '@angular/material/tree';
 import {Observable, of as observableOf} from 'rxjs';
-import {CdkDrag, CdkDragDrop, CdkDropList} from '@angular/cdk/drag-drop';
+import {CdkDragDrop} from '@angular/cdk/drag-drop';
 import {SelectionModel} from '@angular/cdk/collections';
-import {FileNode, FlatTreeNode} from '../common/common.types';
-import {FileDatabase} from "../common/file-database.service";
+import {DatabaseNode, FlatTreeNode} from '../common/common.types';
+import {map} from 'rxjs/operators';
+import {buildFileTree} from './model-helpers';
 
-/**
- * @title Tree with flat nodes
- */
+type DragTreeFlattener = MatTreeFlattener<DatabaseNode, FlatTreeNode, FlatTreeNode>;
+
 @Component({
   selector: 'app-draggable-tree',
   templateUrl: 'draggable-tree.component.html',
@@ -18,61 +18,69 @@ import {FileDatabase} from "../common/file-database.service";
 })
 export class DraggableTreeComponent implements OnInit {
 
-  constructor() {
-    this.treeFlattener = new MatTreeFlattener(this.transformer, this._getLevel,
-      this._isExpandable, this._getChildren);
-    this.treeControl = new FlatTreeControl<FlatTreeNode>(this._getLevel, this._isExpandable);
-    this.dataSource = new MatTreeFlatDataSource(this.treeControl, this.treeFlattener);
-  }
+  @Input() $dataProvider: Observable<DatabaseNode[]>;
+  @Input() sortable = false;
+  @Output() sameOriginDrop = new EventEmitter<any>();
+  @Output() differentOriginDrop = new EventEmitter<any>();
 
   treeControl: FlatTreeControl<FlatTreeNode>;
-  treeFlattener: MatTreeFlattener<FileNode, FlatTreeNode>;
-  dataSource: MatTreeFlatDataSource<FileNode, FlatTreeNode>;
-  // expansion model tracks expansion state
-  expansionModel = new SelectionModel<string>(true);
-  validateDrop = false;
-  database: FileDatabase;
-  @Input() table: string;
-  isDroppable = (drag: CdkDrag<FileNode>, drop: CdkDropList<FileNode[]>) => {
-    return true; // return drop.data === this.dataSource.data;
+  dataSource: MatTreeFlatDataSource<DatabaseNode, FlatTreeNode>;
+  expansionModel = new SelectionModel<DatabaseNode>(true);
+
+  constructor() {
+    const getLevel = (node: FlatTreeNode) => node.level;
+    const isExpandable = (node: FlatTreeNode) => node.expandable;
+    const treeFlattener = this.createTreeFlattener(getLevel, isExpandable);
+
+    this.treeControl = new FlatTreeControl<FlatTreeNode>(getLevel, isExpandable);
+    this.dataSource = new MatTreeFlatDataSource(this.treeControl, treeFlattener);
+  }
+
+  private createTreeFlattener(
+              getLevel: (node: FlatTreeNode) => number,
+              isExpandable: (node: FlatTreeNode) => boolean): DragTreeFlattener {
+    const getChildren = (node: DatabaseNode): Observable<DatabaseNode[]> => observableOf(node.children);
+    const transformer = (node: DatabaseNode, level: number) => {
+      const value: FlatTreeNode = {
+        expandable: !!node.children,
+        level,
+        name: node.name,
+        type: node.type,
+        id: node.id
+      };
+      return value;
+    };
+
+    return new MatTreeFlattener(transformer, getLevel, isExpandable, getChildren);
+  }
+
+  nodeHasChild(_: number, nodeData: FlatTreeNode): boolean {
+    return nodeData.expandable;
   }
 
   ngOnInit(): void {
-    this.database = new FileDatabase(this.table);
-    this.database.dataChange.subscribe(data => this.rebuildTreeForData(data));
+    this.$dataProvider.pipe(map(buildFileTree)).subscribe(data => this.rebuildTreeForData(data));
   }
 
-  transformer: (node: FileNode, level: number) => FlatTreeNode = (node: FileNode, level: number) => {
-    const value: FlatTreeNode = {
-      expandable: !!node.children,
-      level,
-      name: node.name,
-      type: node.type,
-      id: node.id
-    };
-    return value;
-  }
+  visibleNodes(): DatabaseNode[] {
 
-  hasChild = (_: number, _nodeData: FlatTreeNode) => _nodeData.expandable;
-
-  // DRAG AND DROP METHODS
-  /**
-   * This constructs an array of nodes that matches the DOM
-   */
-  visibleNodes(): FileNode[] {
-    const result = [];
-
-    function addExpandedChildren(node: FileNode, expanded: string[]): void {
-      result.push(node);
-      if (expanded.includes(node.id)) {
-        node.children.map((child) => addExpandedChildren(child, expanded));
+    function addExpandedChildren(node: DatabaseNode, expanded: DatabaseNode[]): DatabaseNode[] {
+      const result = [node];
+      if (expanded.includes(node)) {
+        for (const child of node.children) {
+          result.concat(addExpandedChildren(child, expanded));
+        }
       }
+
+      return result;
     }
 
-    this.dataSource.data.forEach((node) => {
-      addExpandedChildren(node, this.expansionModel.selected);
-    });
-    return result;
+    return this.dataSource.data.reduce(
+      (acc, node) => {
+        return acc.concat(addExpandedChildren(node, this.expansionModel.selected));
+      },
+      []
+    );
   }
 
   /*
@@ -80,32 +88,16 @@ export class DraggableTreeComponent implements OnInit {
    * then rebuild the tree.
    */
   drop(event: CdkDragDrop<any>): void {
-    console.log('origin index:', event.previousIndex);
-    console.log('destination index:', event.currentIndex);
-
     // ignore drops outside of the tree
     if (!event.isPointerOverContainer) {
       return;
     }
 
-    // Skip drops on same container
     if (event.previousContainer === event.container) {
-      return;
+      this.onSameOriginDrop(event);
+    } else {
+      this.onDifferentOriginDrop(event);
     }
-
-    const dropLevel = this.findDropLevel(event);
-
-    // ensure validity of drop - must be same level
-    const node = event.item.data;
-    console.log('dropLevel: ', dropLevel);
-    console.log('node level: ', node.level);
-    if (dropLevel !== node.level) {
-      alert('Items can only be moved within the same level.');
-      return;
-    }
-
-    // // rebuild tree with mutated data
-    // this.rebuildTreeForData(changedData);
   }
 
   /**
@@ -115,42 +107,67 @@ export class DraggableTreeComponent implements OnInit {
 
   rebuildTreeForData(data: any): void {
     this.dataSource.data = data;
-    this.expansionModel.selected.forEach((id) => {
-      const node = this.treeControl.dataNodes.find((n) => n.id === id);
+    this.expansionModel.selected.forEach((expandedNode) => {
+      const node = this.treeControl.dataNodes.find((n) => n.id === expandedNode.id);
       this.treeControl.expand(node);
     });
   }
 
-  private _getLevel = (node: FlatTreeNode) => node.level;
-
-  private _isExpandable = (node: FlatTreeNode) => node.expandable;
-
-  private _getChildren = (node: FileNode): Observable<FileNode[]> => observableOf(node.children);
-
-  private findDropLevel(event: CdkDragDrop<string[]>) {
-    const visibleNodes = this.visibleNodes();
-    const index = (event.currentIndex >= visibleNodes.length) ? visibleNodes.length - 1 : event.currentIndex;
-
-    const nodeAtDest = visibleNodes[index];
-    return this.treeControl.dataNodes.find((n) => nodeAtDest.id === n.id).level;
+  private onDifferentOriginDrop(event: CdkDragDrop<any>): void {
+    // ensure validity of drop - must be same level
+    const node = event.item.data;
+    this.differentOriginDrop.emit({
+      item: event.item,
+      toParent: this.findNodeParent(event.currentIndex)
+    });
   }
 
-  private getParentNode(node: FlatTreeNode): FlatTreeNode | null {
-    const currentLevel = node.level;
-    if (currentLevel < 1) {
+  private onSameOriginDrop(event: CdkDragDrop<any>): void {
+    this.sameOriginDrop.emit({
+      item: event.item,
+      fromParent: this.findNodeParent(event.previousIndex),
+      toParent: this.findNodeParent(event.currentIndex)
+    });
+  }
+
+  private findNodeParent(dropIndex: number): DatabaseNode | null {
+    // Special case - items at the top of the list have no parent
+    if (dropIndex === 0) {
       return null;
     }
-    const startIndex = this.treeControl.dataNodes.indexOf(node) - 1;
-    for (let i = startIndex; i >= 0; i--) {
-      const currentNode = this.treeControl.dataNodes[i];
-      if (currentNode.level < currentLevel) {
-        return currentNode;
+
+    const visibleNodes = this.visibleNodes();
+    // clamp our index to the size of visible nodes -- dropping at the end of the list will add to the bottom-most node
+    const index = (dropIndex >= visibleNodes.length) ? visibleNodes.length - 1 : dropIndex;
+
+    const nodeAtDest = visibleNodes[index];
+
+    function findInTree(nodes: DatabaseNode[], predicate: (_: DatabaseNode) => boolean): DatabaseNode | null {
+      for (const node of nodes) {
+        if (predicate(node)) {
+          return node;
+        } else if (node.children) {
+          const result = findInTree(node.children, predicate);
+          if (result) {
+            return result;
+          }
+        }
       }
     }
-    return null;
+
+    return findInTree(this.dataSource.data, (n) => nodeAtDest.id === n.id);
   }
 
-  onDropEnter($event: CdkDragDrop<string[]>): boolean {
-    return $event.container === $event.previousContainer;
+  getIconFor(type: string): string {
+    switch (type) {
+      case 'column':
+        return 'table_rows';
+      case 'table':
+        return 'table_chart';
+      case 'database':
+        return 'filter_none';
+      default:
+        return 'help_outline';
+    }
   }
 }

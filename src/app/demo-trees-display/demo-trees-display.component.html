@@ -1,10 +1,18 @@
 <div style="background-color: lightblue;">
   <div class="row" cdkDropListGroup>
     <div class="column" style="background-color: white;">
-      <app-draggable-tree id="source" [table]="sourceData"></app-draggable-tree>
+      <app-draggable-tree id="source"
+                          [$dataProvider]="sourceData.dataChange"
+                          (differentOriginDrop)="onDestinationDragBack($event)"
+      ></app-draggable-tree>
     </div>
     <div class="column" style="background-color: white;">
-      <app-draggable-tree id="destination" [table]="destinationData"></app-draggable-tree>
+      <app-draggable-tree id="destination"
+                          [$dataProvider]="destinationData.dataChange"
+                          [sortable]="true"
+                          (sameOriginDrop)="onDestinationMove($event)"
+                          (differentOriginDrop)="onDestinationAdd($event)"
+      ></app-draggable-tree>
     </div>
   </div>
 </div>

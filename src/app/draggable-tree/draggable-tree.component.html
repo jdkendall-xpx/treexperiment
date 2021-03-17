@@ -1,24 +1,25 @@
-<mat-tree [cdkDropListData]="dataSource" [dataSource]="dataSource" [treeControl]="treeControl" (cdkDropListDropped)="drop($event)" [cdkDropListEnterPredicate]="isDroppable" cdkDropList>
+<mat-tree [cdkDropListData]="dataSource" [dataSource]="dataSource" [treeControl]="treeControl" (cdkDropListDropped)="drop($event)" [cdkDropListSortingDisabled]="!sortable" cdkDropList>
   <mat-tree-node *matTreeNodeDef="let node" matTreeNodeToggle matTreeNodePadding cdkDrag [cdkDragData]="node">
     <button mat-icon-button disabled></button>
     <mat-icon class="type-icon" [attr.aria-label]="node.type + 'icon'">
-      {{ node.type === 'table' ? 'table_rows' : 'table_chart' }}
+      {{ getIconFor(node.type) }}
     </mat-icon>
-    Leaf Node: {{node.name}}
+    {{node.name}}
     <div *cdkDragPlaceholder class="drag-placeholder"></div>
   </mat-tree-node>
 
-  <mat-tree-node *matTreeNodeDef="let node; when: hasChild" matTreeNodePadding cdkDrag [cdkDragData]="node">
+  <mat-tree-node *matTreeNodeDef="let node; when: nodeHasChild" matTreeNodePadding cdkDrag [cdkDragData]="node">
     <button mat-icon-button matTreeNodeToggle
-            [attr.aria-label]="'Toggle ' + node.name">
+            [attr.aria-label]="'Toggle ' + node.name"
+            (click)="expansionModel.toggle(node)">
       <mat-icon class="mat-icon-rtl-mirror">
         {{treeControl.isExpanded(node) ? 'expand_more' : 'chevron_right'}}
       </mat-icon>
     </button>
     <mat-icon class="type-icon" [attr.aria-label]="node.type + 'icon'">
-      {{ node.type === 'table' ? 'table_rows' : 'table_chart' }}
+      {{ getIconFor(node.type) }}
     </mat-icon>
-    Branch Node: {{node.name}}
+    {{node.name}}
     <div *cdkDragPlaceholder class="drag-placeholder"></div>
   </mat-tree-node>
 </mat-tree>

@@ -1,15 +1,15 @@
 import {BehaviorSubject} from "rxjs";
-import {FileNode} from './common.types';
-import {tables} from "../example-data";
+import {DatabaseNode} from './common.types';
+import {tables} from "./example-data";
 
 export class FileDatabase {
-  dataChange = new BehaviorSubject<FileNode[]>([]);
+  dataChange = new BehaviorSubject<DatabaseNode[]>([]);
 
   constructor(table: string) {
     this.initialize(table);
   }
 
-  get data(): FileNode[] {
+  get data(): DatabaseNode[] {
     return this.dataChange.value;
   }
 

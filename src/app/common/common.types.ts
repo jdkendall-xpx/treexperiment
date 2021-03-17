@@ -1,9 +1,9 @@
 /** File node data with possible child nodes. */
-export interface FileNode {
+export interface DatabaseNode {
   id: string;
   name: string;
   type: string;
-  children?: FileNode[];
+  children?: DatabaseNode[];
 }
 
 /**
