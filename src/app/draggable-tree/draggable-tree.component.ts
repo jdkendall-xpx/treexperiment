@@ -117,14 +117,14 @@ export class DraggableTreeComponent implements OnInit {
     // ensure validity of drop - must be same level
     const node = event.item.data;
     this.differentOriginDrop.emit({
-      item: event.item,
+      item: event.item.data,
       toParent: this.findNodeParent(event.currentIndex)
     });
   }
 
   private onSameOriginDrop(event: CdkDragDrop<any>): void {
     this.sameOriginDrop.emit({
-      item: event.item,
+      item: event.item.data,
       fromParent: this.findNodeParent(event.previousIndex),
       toParent: this.findNodeParent(event.currentIndex)
     });
