@@ -1,0 +1,16 @@
+.row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  flex-basis: 100%;
+  flex: 1;
+  border: black solid 1px;
+  margin-left: 50px;
+  margin-right: 50px;
+}
